@@ -15,10 +15,15 @@ count_entries <- function(x) {
   ifelse(is.na(x), NA_integer_, str_count(x, "\\|\\|") + 1)
 }
 
-# Convert safely to integer year (no warnings)
+# Convert safely to integer year 
 safe_year <- function(x) {
-  suppressWarnings(as.integer(x))
+  if (inherits(x, "Date")) {
+    as.integer(format(x, "%Y"))
+  } else {
+    suppressWarnings(as.integer(x))
+  }
 }
+
 
 # ---------------------------
 # HIOF
@@ -392,10 +397,10 @@ process_uit <- function(filename) {
       institution_short = "uit",
       collection = collection,
       
-      glu = glu_from_file,
+      GLU = glu_from_file,
       
       # We do NOT trust dc.date.issued for UiT yet → set to NA
-      year = NA_integer_,
+      year = safe_year(dc.date.issued),
       
       authors = dc.contributor.author,
       n_authors = as.integer(count_entries(dc.contributor.author)),
