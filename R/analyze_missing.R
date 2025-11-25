@@ -1,37 +1,19 @@
-summarise_missing <- function(df) {
-  df |>
-    dplyr::group_by(institution_short) |>
-    dplyr::summarise(
-      rows          = dplyr::n(),
-      missing_year  = sum(is.na(year)),
-      missing_GLU   = sum(is.na(GLU)),
-      missing_authors = sum(is.na(authors)),
-      missing_title = sum(is.na(title)),
-      missing_lang  = sum(is.na(language)),
-      missing_abs   = sum(is.na(abstract)),
-      .groups = "drop"
-    ) |>
-    dplyr::arrange(institution_short)
-}
+library(dplyr)
 
+source("R/utils.R")
+
+masters <- readRDS("data/masters.RDS")
 tbl_missing <- summarise_missing(masters)
-View(tbl_missing)
 
+View(tbl_missing)
 
 uit <- masters %>% filter(institution_short == "uit")
 
-sum(is.na(uit$year))             # 207
-sum(is.na(uit$authors))          # 207
-
+uit_missing <- uit |> summarise_missing()
 
 sum(is.na(uit$year) & is.na(uit$authors))
-
-
 sum(is.na(uit$year) & !is.na(uit$authors))
-
-
 sum(!is.na(uit$year) & is.na(uit$authors))
-
 
 # 1) Krysstabell: viser om noen kombinasjoner finnes
 uit |>
