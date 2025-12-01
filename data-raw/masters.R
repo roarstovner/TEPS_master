@@ -3,8 +3,9 @@ library(purrr)
 library(readr)
 library(stringr)
 
+source("R/utils.R")
 source("R/process_masters.R")
-source("R/validate_masters.R")
+
 
 filenames <- list.files(path = "data-raw", pattern = "\\.csv$", full.names = TRUE)
 filenames <- filenames[!str_detect(filenames, "hivolda")]  # dropp den korrupte fila

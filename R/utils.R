@@ -97,3 +97,31 @@ summarise_missing <- function(df) {
     dplyr::arrange(institution_short)
 }
 
+# -------------------------------------------------------------------
+# Helpers ------------------------------------------------------------
+# -------------------------------------------------------------------
+
+# Count number of entries in strings of the type "name1 || name2"
+# and "abstract_nor || abstract_en"
+count_entries <- function(x) {
+  ifelse(
+    is.na(x),
+    NA_integer_,
+    stringr::str_count(x, "\\|\\|") + 1L
+  )
+}
+
+# Convert safely to integer year 
+safe_year <- function(x) {
+  if (inherits(x, "Date")) {
+    as.integer(format(x, "%Y"))
+  } else {
+    suppressWarnings(as.integer(x))
+  }
+}
+
+# Coalesce over columns selected with tidyselect
+# (to be used inside dplyr verbs)
+coalesce_cols <- function(...) {
+  dplyr::coalesce(!!!dplyr::pick(...))
+}

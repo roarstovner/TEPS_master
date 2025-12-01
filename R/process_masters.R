@@ -1,370 +1,436 @@
-# count number of entries in strings of the type "name1 || name2" and "abstract_nor || abstract_en"
-count_entries <- function(x) {
-  ifelse(is.na(x), NA_integer_, stringr::str_count(x, "\\|\\|") + 1)
-}
+# R/process_masters.R
+# Processing functions for master theses metadata (MGLU)
 
-# Convert safely to integer year 
-safe_year <- function(x) {
-  if (inherits(x, "Date")) {
-    as.integer(format(x, "%Y"))
-  } else {
-    suppressWarnings(as.integer(x))
-  }
-}
-
-coalesce_cols <- function(...) {
-  dplyr::coalesce(!!!pick(...))
-}
-
-
-# ---------------------------
-# HIOF
-# ---------------------------
 process_hiof <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
   df |>
     dplyr::mutate(
-      id = as.character(id),
+      id                = as.character(id),
+      collection        = collection,          # NY
       institution_short = "hiof",
       GLU = dplyr::case_match(
         collection,
         "11250/3011257" ~ "MGLU 1-7",
         "11250/3011260" ~ "MGLU 5-10",
-        .default = NA_character_
+        .default        = NA_character_
       ),
-      year = safe_year(dc.date.issued),
-      authors = dc.contributor.author,
-      n_authors = count_entries(dc.contributor.author),
-      url = dc.identifier.uri,
-      language = `dc.language.iso[en_US]`,
-      subject = NA_character_,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
+      n_authors = as.integer(count_entries(dc.contributor.author)),  # integer
+      url       = dc.identifier.uri,
+      language  = `dc.language.iso[en_US]`,
+      subject   = NA_character_,
       full_text_available = NA_character_,
-      title = `dc.title[en_US]`,
+      title     = `dc.title[en_US]`,
       title_alt = NA_character_,
-      abstract = NA_character_,
-      abstract_alt = NA_character_,
+      abstract      = NA_character_,
+      abstract_alt  = NA_character_,
       .keep = "none"
     )
 }
 
-# ---------------------------
-# HVL
-# ---------------------------
+
+# -------------------------------------------------------------------
+# HVL ----------------------------------------------------------------
+# -------------------------------------------------------------------
 process_hvl <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
-  localcode_cols <- intersect(
-    c("dc.description.localcode",
-      "dc.description.localcode[]",
-      "dc.description.localcode[en_US]"),
-    names(df)
-  )
-  
   df |>
-    dplyr::mutate(localcode = dplyr::coalesce(!!!syms(localcode_cols))) |>
-    dplyr::filter(stringr::str_detect(localcode, regex("^mg[bu]", ignore_case = TRUE))) |>
+    # Samle localcode fra alle aktuelle kolonner
     dplyr::mutate(
-      id = as.character(id),
+      localcode = coalesce_cols(
+        dplyr::any_of(c(
+          "dc.description.localcode",
+          "dc.description.localcode[]",
+          "dc.description.localcode[en_US]"
+        ))
+      )
+    ) |>
+    # Velg bare MGLU
+    dplyr::filter(
+      stringr::str_detect(
+        localcode,
+        stringr::regex("^mg[bu]", ignore_case = TRUE)
+      )
+    ) |>
+    dplyr::mutate(
+      id                = as.character(id),
       institution_short = "hvl",
+      collection        = collection,   # ← NYTT: beholder collection
       GLU = dplyr::case_when(
-        stringr::str_detect(localcode, regex("^mgb", ignore_case = TRUE)) ~ "MGLU 1-7",
-        stringr::str_detect(localcode, regex("^mgu", ignore_case = TRUE)) ~ "MGLU 5-10",
+        stringr::str_detect(localcode, stringr::regex("^mgb", ignore_case = TRUE)) ~ "MGLU 1-7",
+        stringr::str_detect(localcode, stringr::regex("^mgu", ignore_case = TRUE)) ~ "MGLU 5-10",
         TRUE ~ NA_character_
       ),
       subject = dplyr::case_when(
-        stringr::str_detect(localcode, regex("^mg[bu]en")) ~ "Engelsk",
-        stringr::str_detect(localcode, regex("^mg[bu]kh")) ~ "Kunst og h\u00e5ndverk",
-        stringr::str_detect(localcode, regex("^mg[bu]kr")) ~ "KRLE",
-        stringr::str_detect(localcode, regex("^mg[bu]k\u00f8")) ~ "Kropps\u00f8ving",
-        stringr::str_detect(localcode, regex("^mg[bu]ma")) ~ "Matematikk",
-        stringr::str_detect(localcode, regex("^mg[bu]mh")) ~ "Mat og helse",
-        stringr::str_detect(localcode, regex("^mg[bu]mu")) ~ "Musikk",
-        stringr::str_detect(localcode, regex("^mg[bu]na")) ~ "Naturfag",
-        stringr::str_detect(localcode, regex("^mg[bu]no")) ~ "Norsk",
-        stringr::str_detect(localcode, regex("^mg[bu]sa")) ~ "Samfunnsfag",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]en", ignore_case = TRUE)
+        ) ~ "Engelsk",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]kh", ignore_case = TRUE)
+        ) ~ "Kunst og h\u00e5ndverk",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]kr", ignore_case = TRUE)
+        ) ~ "KRLE",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]k\u00f8", ignore_case = TRUE)
+        ) ~ "Kropps\u00f8ving",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]ma", ignore_case = TRUE)
+        ) ~ "Matematikk",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]mh", ignore_case = TRUE)
+        ) ~ "Mat og helse",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]mu", ignore_case = TRUE)
+        ) ~ "Musikk",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]na", ignore_case = TRUE)
+        ) ~ "Naturfag",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]no", ignore_case = TRUE)
+        ) ~ "Norsk",
+        stringr::str_detect(
+          localcode, stringr::regex("^mg[bu]sa", ignore_case = TRUE)
+        ) ~ "Samfunnsfag",
         TRUE ~ NA_character_
       ),
-      year = safe_year(dc.date.issued),
-      authors = dc.contributor.author,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
       n_authors = count_entries(dc.contributor.author),
-      url = dc.identifier.uri,
-      language = `dc.language.iso[en_US]`,
-      title = `dc.title[en_US]`,
+      url       = dc.identifier.uri,
+      language  = `dc.language.iso[en_US]`,
+      title     = `dc.title[en_US]`,
       title_alt = `dc.title.alternative[en_US]`,
-      abstract = `dc.description.abstract[en_US]`,
-      abstract_alt = NA_character_,
+      abstract      = `dc.description.abstract[en_US]`,
+      abstract_alt  = NA_character_,
       full_text_available = NA_character_,
       .keep = "none"
     )
 }
-# ---------------------------
-# INN
-# ---------------------------
+
+# -------------------------------------------------------------------
+# INN ----------------------------------------------------------------
+# -------------------------------------------------------------------
 process_inn <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
   df |>
     dplyr::mutate(
-      id = as.character(id),
+      id                = as.character(id),
       institution_short = "inn",
+      collection        = collection,   # ← NY
       GLU = dplyr::case_match(
         collection,
         "11250/2980782" ~ "MGLU 1-7",
         "11250/2980784" ~ "MGLU 5-10",
         .default = NA_character_
       ),
-      year = safe_year(dc.date.issued),
-      authors = dc.contributor.author,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
       n_authors = count_entries(dc.contributor.author),
-      url = dc.identifier.uri,
-      language = dc.language,
+      url       = dc.identifier.uri,
+      language  = dc.language,
       full_text_available = dplyr::case_when(
         stringr::str_detect(dc.description, "Full text not available") ~ "Nei",
         is.na(dc.description) ~ "Ja",
         TRUE ~ NA_character_
       ),
-      subject = NA_character_,
-      title = dc.title,
+      subject   = NA_character_,
+      title     = dc.title,
       title_alt = NA_character_,
-      abstract = stringr::str_split_i(dc.description.abstract, "\\|\\|", 1),
-      abstract_alt = stringr::str_split_i(dc.description.abstract, "\\|\\|", 2),
+      abstract      = stringr::str_split_i(dc.description.abstract, "\\|\\|", 1),
+      abstract_alt  = stringr::str_split_i(dc.description.abstract, "\\|\\|", 2),
       .keep = "none"
     )
 }
 
-# ---------------------------
-# Oslomet – Old
-# ---------------------------
+# -------------------------------------------------------------------
+# Oslomet – Old ------------------------------------------------------
+# -------------------------------------------------------------------
 process_oslomet_old <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
   df |>
     dplyr::mutate(
-      id = as.character(id),
+      id                = as.character(id),
       institution_short = "oslomet",
+      collection        = collection,   # ← NY
       GLU = dplyr::case_match(
         collection,
         "10642/6821" ~ "MGLU 1-7",
         "10642/6822" ~ "MGLU 5-10",
         .default = NA_character_
       ),
-      year = safe_year(dc.date.issued),
-      authors = dc.contributor.author,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
       n_authors = count_entries(dc.contributor.author),
-      url = dc.identifier.uri,
-      language = `dc.language.iso[en_US]`,
-      subject = NA_character_,
+      url       = dc.identifier.uri,
+      language  = `dc.language.iso[en_US]`,
+      subject   = NA_character_,
       full_text_available = NA_character_,
-      title = `dc.title[en_US]`,
+      title     = `dc.title[en_US]`,
       title_alt = `dc.title.alternative[en_US]`,
-      abstract = stringr::str_split_i(`dc.description.abstract[en_US]`,
-                             "\\|\\||\\r\\n\\r\\n\\r\\n", 1),
-      abstract_alt = stringr::str_split_i(`dc.description.abstract[en_US]`,
-                                 "\\|\\||\\r\\n\\r\\n\\r\\n", 2),
+      abstract      = stringr::str_split_i(
+        `dc.description.abstract[en_US]`,
+        "\\|\\||\\r\\n\\r\\n\\r\\n",
+        1
+      ),
+      abstract_alt  = stringr::str_split_i(
+        `dc.description.abstract[en_US]`,
+        "\\|\\||\\r\\n\\r\\n\\r\\n",
+        2
+      ),
       .keep = "none"
     )
 }
 
-# ---------------------------
-# Oslomet – New
-# ---------------------------
+# -------------------------------------------------------------------
+# Oslomet – New ------------------------------------------------------
+# -------------------------------------------------------------------
 process_oslomet_new <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
-  language_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.language")]
-  title_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.title($|\\[)") &
-                            !stringr::str_detect(names(df), "alternative")]
-  abstract_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.description\\.abstract")]
+  # Finn kolonner ved navn (enkelt, uten rlang)
+  language_cols <- grep("^dc\\.language", names(df), value = TRUE)
+  title_cols    <- grep("^dc\\.title($|\\[)", names(df), value = TRUE)
+  title_cols    <- title_cols[!grepl("alternative", title_cols)]
+  abstract_cols <- grep("^dc\\.description\\.abstract", names(df), value = TRUE)
+  
+  # Språk: coalesce over språk-kolonnene hvis de finnes
+  if (length(language_cols) == 0) {
+    language_vec <- rep(NA_character_, nrow(df))
+  } else {
+    language_vec <- do.call(dplyr::coalesce, df[language_cols])
+  }
+  
+  # Tittel: coalesce over tittel-kolonnene
+  if (length(title_cols) == 0) {
+    title_vec <- rep(NA_character_, nrow(df))
+  } else {
+    title_vec <- do.call(dplyr::coalesce, df[title_cols])
+  }
+  
+  # Abstract: coalesce over abstract-kolonner, så splitte i norsk/engelsk
+  if (length(abstract_cols) == 0) {
+    abstract_raw <- rep(NA_character_, nrow(df))
+  } else {
+    abstract_raw <- do.call(dplyr::coalesce, df[abstract_cols])
+  }
+  
+  abstract_vec     <- stringr::str_split_i(abstract_raw, "\\|\\||\\r\\n\\r\\n\\r\\n", 1)
+  abstract_alt_vec <- stringr::str_split_i(abstract_raw, "\\|\\||\\r\\n\\r\\n\\r\\n", 2)
+  
+  # full_text_available – Oslomet-new har ikke pålitelig felt → sett NA
+  full_text_vec <- rep(NA_character_, nrow(df))
   
   df |>
     dplyr::mutate(
-      id = as.character(id),
+      id                = as.character(id),
       institution_short = "oslomet",
+      collection        = collection,
       GLU = dplyr::case_match(
         collection,
         "10642/6821" ~ "MGLU 1-7",
         "10642/6822" ~ "MGLU 5-10",
-        .default = NA_character_
+        .default     = NA_character_
       ),
-      year = safe_year(dc.date.issued),
-      authors = dc.contributor.author,
-      n_authors = count_entries(dc.contributor.author),
-      url = dc.identifier.uri,
-      language = dplyr::coalesce(!!!syms(language_cols)),
-      subject = NA_character_,
-      full_text_available = NA_character_,
-      title = dplyr::coalesce(!!!syms(title_cols)),
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
+      n_authors = as.integer(count_entries(dc.contributor.author)),
+      url       = dc.identifier.uri,
+      
+      language  = language_vec,
+      subject   = NA_character_,
+      title     = title_vec,
       title_alt = NA_character_,
-      abstract = stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)),
-                             "\\|\\||\\r\\n\\r\\n\\r\\n", 1),
-      abstract_alt = stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)),
-                                 "\\|\\||\\r\\n\\r\\n\\r\\n", 2),
+      
+      abstract      = abstract_vec,
+      abstract_alt  = abstract_alt_vec,
+      full_text_available = full_text_vec,
+      
       .keep = "none"
     )
 }
 
-# ---------------------------
-# USN
-# ---------------------------
-process_usn <- function(filename){
+
+# -------------------------------------------------------------------
+# USN ----------------------------------------------------------------
+# -------------------------------------------------------------------
+process_usn <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
-  # Detect available columns by pattern
-  language_cols    <- names(df)[stringr::str_detect(names(df), "^dc\\.language")]
-  title_cols       <- names(df)[stringr::str_detect(names(df), "^dc\\.title($|\\[)") & !stringr::str_detect(names(df), "alternative")]
-  title_alt_cols   <- names(df)[stringr::str_detect(names(df), "^dc\\.title\\.alternative")]
-  abstract_cols    <- names(df)[stringr::str_detect(names(df), "^dc\\.description\\.abstract")]
-  description_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.description($|\\[)")]
+  # Detekter språk / tittel / abstract-kolonner
+  language_cols  <- grep("^dc\\.language", names(df), value = TRUE)
+  title_cols     <- grep("^dc\\.title($|\\[)", names(df), value = TRUE)
+  title_cols     <- title_cols[!grepl("alternative", title_cols)]
+  title_alt_cols <- grep("^dc\\.title\\.alternative", names(df), value = TRUE)
+  abstract_cols  <- grep("^dc\\.description\\.abstract", names(df), value = TRUE)
+  
+  # Språk
+  if (length(language_cols) == 0) {
+    language_vec <- rep(NA_character_, nrow(df))
+  } else {
+    language_vec <- do.call(dplyr::coalesce, df[language_cols])
+  }
+  
+  # Tittel
+  if (length(title_cols) == 0) {
+    title_vec <- rep(NA_character_, nrow(df))
+  } else {
+    title_vec <- do.call(dplyr::coalesce, df[title_cols])
+  }
+  
+  # Alternativ tittel
+  if (length(title_alt_cols) == 0) {
+    title_alt_vec <- rep(NA_character_, nrow(df))
+  } else {
+    title_alt_vec <- do.call(dplyr::coalesce, df[title_alt_cols])
+  }
+  
+  # Abstract
+  if (length(abstract_cols) == 0) {
+    abstract_raw <- rep(NA_character_, nrow(df))
+  } else {
+    abstract_raw <- do.call(dplyr::coalesce, df[abstract_cols])
+  }
+  abstract_vec     <- stringr::str_split_i(abstract_raw, "\\|\\|", 1)
+  abstract_alt_vec <- stringr::str_split_i(abstract_raw, "\\|\\|", 2)
+  
+  # full_text_available basert på dc.description hvis den finnes
+  if ("dc.description" %in% names(df)) {
+    desc_vec <- df$dc.description
+    full_text_vec <- dplyr::case_when(
+      stringr::str_detect(desc_vec, "Full text not available") ~ "Nei",
+      is.na(desc_vec)                                          ~ "Ja",
+      TRUE                                                     ~ NA_character_
+    )
+  } else {
+    full_text_vec <- rep(NA_character_, nrow(df))
+  }
   
   df |>
     dplyr::mutate(
-      id = id,
+      id                = as.character(id),
       institution_short = "usn",
-      collection = collection,
-      
+      collection        = collection,
       GLU = dplyr::case_match(
         collection,
         "11250/2732887" ~ "MGLU 1-7",
         "11250/2732886" ~ "MGLU 5-10",
         "11250/2732885" ~ "MGLU 1-7",
-        .default = NA_character_
+        .default        = NA_character_
       ),
-      
-      year = as.integer(dc.date.issued),
-      authors = dc.contributor.author,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
       n_authors = as.integer(count_entries(dc.contributor.author)),
-      url = dc.identifier.uri,
+      url       = dc.identifier.uri,
       
-      language = if (length(language_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(language_cols))
-      },
-      
-      full_text_available = dplyr::case_when(
-        length(description_cols) == 0 ~ NA_character_,
-        TRUE ~ dplyr::case_when(
-          stringr::str_detect(dplyr::coalesce(!!!syms(description_cols)), "Full text not available") ~ "Nei",
-          is.na(dplyr::coalesce(!!!syms(description_cols))) ~ "Ja",
-          TRUE ~ NA_character_
-        )
-      ),
-      
-      subject = NA_character_,
-      
-      title = if (length(title_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(title_cols))
-      },
-      
-      title_alt = if (length(title_alt_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(title_alt_cols))
-      },
-      
-      abstract = if (length(abstract_cols) == 0) {
-        NA_character_
-      } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 1)
-      },
-      
-      abstract_alt = if (length(abstract_cols) == 0) {
-        NA_character_
-      } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 2)
-      },
+      language  = language_vec,
+      subject   = NA_character_,
+      title     = title_vec,
+      title_alt = title_alt_vec,
+      abstract      = abstract_vec,
+      abstract_alt  = abstract_alt_vec,
+      full_text_available = full_text_vec,
       
       .keep = "none"
     )
 }
 
-# ---------------------------
-# UiA
-# ---------------------------
+
+
+# -------------------------------------------------------------------
+# UiA ----------------------------------------------------------------
+# -------------------------------------------------------------------
 process_uia <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
   file_base <- basename(filename)
   
-  # Infer GLU from the file name
   glu_from_file <- dplyr::case_when(
     stringr::str_detect(file_base, "1-7")  ~ "MGLU 1-7",
     stringr::str_detect(file_base, "5-10") ~ "MGLU 5-10",
     stringr::str_detect(file_base, "8-13") ~ "MGLU 8-13",
-    TRUE                          ~ NA_character_
+    TRUE ~ NA_character_
   )
   
-  # Detect available columns by pattern
-  language_cols    <- names(df)[stringr::str_detect(names(df), "^dc\\.language")]
-  title_cols       <- names(df)[stringr::str_detect(names(df), "^dc\\.title($|\\[)") & !stringr::str_detect(names(df), "alternative")]
-  title_alt_cols   <- names(df)[stringr::str_detect(names(df), "^dc\\.title\\.alternative")]
-  abstract_cols    <- names(df)[stringr::str_detect(names(df), "^dc\\.description\\.abstract")]
-  description_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.description($|\\[)")]
+  language_cols  <- grep("^dc\\.language", names(df), value = TRUE)
+  title_cols     <- grep("^dc\\.title($|\\[)", names(df), value = TRUE)
+  title_cols     <- title_cols[!grepl("alternative", title_cols)]
+  title_alt_cols <- grep("^dc\\.title\\.alternative", names(df), value = TRUE)
+  abstract_cols  <- grep("^dc\\.description\\.abstract", names(df), value = TRUE)
+  
+  # Språk
+  if (length(language_cols) == 0) {
+    language_vec <- rep(NA_character_, nrow(df))
+  } else {
+    language_vec <- do.call(dplyr::coalesce, df[language_cols])
+  }
+  
+  # Titler
+  if (length(title_cols) == 0) {
+    title_vec <- rep(NA_character_, nrow(df))
+  } else {
+    title_vec <- do.call(dplyr::coalesce, df[title_cols])
+  }
+  
+  if (length(title_alt_cols) == 0) {
+    title_alt_vec <- rep(NA_character_, nrow(df))
+  } else {
+    title_alt_vec <- do.call(dplyr::coalesce, df[title_alt_cols])
+  }
+  
+  # Abstract
+  if (length(abstract_cols) == 0) {
+    abstract_raw <- rep(NA_character_, nrow(df))
+  } else {
+    abstract_raw <- do.call(dplyr::coalesce, df[abstract_cols])
+  }
+  abstract_vec     <- stringr::str_split_i(abstract_raw, "\\|\\|", 1)
+  abstract_alt_vec <- stringr::str_split_i(abstract_raw, "\\|\\|", 2)
+  
+  # full_text_available fra dc.description hvis den finnes
+  if ("dc.description" %in% names(df)) {
+    desc_vec <- df$dc.description
+    full_text_vec <- dplyr::case_when(
+      stringr::str_detect(desc_vec, "Full text not available") ~ "Nei",
+      is.na(desc_vec)                                          ~ "Ja",
+      TRUE                                                     ~ NA_character_
+    )
+  } else {
+    full_text_vec <- rep(NA_character_, nrow(df))
+  }
   
   df |>
     dplyr::mutate(
-      id = id,
+      id                = as.character(id),
       institution_short = "uia",
-      collection = collection,
-      
-      GLU = glu_from_file,
-      
-      year = as.integer(dc.date.issued),
-      authors = dc.contributor.author,
+      collection        = collection,
+      GLU               = glu_from_file,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
       n_authors = as.integer(count_entries(dc.contributor.author)),
-      url = dc.identifier.uri,
+      url       = dc.identifier.uri,
       
-      language = if (length(language_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(language_cols))
-      },
-      
-      full_text_available = dplyr::case_when(
-        length(description_cols) == 0 ~ NA_character_,
-        TRUE ~ dplyr::case_when(
-          stringr::str_detect(dplyr::coalesce(!!!syms(description_cols)), "Full text not available") ~ "Nei",
-          is.na(dplyr::coalesce(!!!syms(description_cols))) ~ "Ja",
-          TRUE ~ NA_character_
-        )
-      ),
-      
-      subject = NA_character_,
-      
-      title = if (length(title_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(title_cols))
-      },
-      
-      title_alt = if (length(title_alt_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(title_alt_cols))
-      },
-      
-      abstract = if (length(abstract_cols) == 0) {
-        NA_character_
-      } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 1)
-      },
-      
-      abstract_alt = if (length(abstract_cols) == 0) {
-        NA_character_
-      } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 2)
-      },
+      language  = language_vec,
+      subject   = NA_character_,
+      title     = title_vec,
+      title_alt = title_alt_vec,
+      abstract      = abstract_vec,
+      abstract_alt  = abstract_alt_vec,
+      full_text_available = full_text_vec,
       
       .keep = "none"
     )
 }
 
-# ---------------------------
-# UiT
-# ---------------------------
+
+# -------------------------------------------------------------------
+# UiT ----------------------------------------------------------------
+# -------------------------------------------------------------------
 process_uit <- function(filename) {
   df <- readr::read_csv(filename, show_col_types = FALSE)
   
@@ -376,69 +442,76 @@ process_uit <- function(filename) {
     TRUE ~ NA_character_
   )
   
-  language_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.language")]
-  title_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.title($|\\[)") &
-                            !stringr::str_detect(names(df), "alternative")]
-  title_alt_cols <- names(df)[stringr::str_detect(names(df), "title.alternative")]
-  abstract_cols <- names(df)[stringr::str_detect(names(df), "description.abstract")]
-  description_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.description")]
+  # Finn aktuelle kolonner etter mønster
+  language_cols    <- names(df)[stringr::str_detect(names(df), "^dc\\.language")]
+  title_cols       <- names(df)[stringr::str_detect(names(df), "^dc\\.title($|\\[)") &
+                                  !stringr::str_detect(names(df), "alternative")]
+  title_alt_cols   <- names(df)[stringr::str_detect(names(df), "title.alternative")]
+  abstract_cols    <- names(df)[stringr::str_detect(names(df), "description.abstract")]
+  description_cols <- names(df)[stringr::str_detect(names(df), "^dc\\.description($|\\[)")]
+  
+  # Lag én samlekolonne med "description" FØR vi gjør .keep = "none"
+  if (length(description_cols) == 0) {
+    df <- df |>
+      dplyr::mutate(desc_tmp = NA_character_)
+  } else {
+    df <- df |>
+      dplyr::mutate(
+        desc_tmp = dplyr::coalesce(!!!rlang::syms(description_cols))
+      )
+  }
   
   df |>
     dplyr::mutate(
-      id = as.character(id),
+      id                = as.character(id),
       institution_short = "uit",
-      collection = collection,
+      collection        = collection,
+      GLU               = glu_from_file,
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
+      n_authors = count_entries(dc.contributor.author),
+      url       = dc.identifier.uri,
       
-      GLU = glu_from_file,
-      
-      # We do NOT trust dc.date.issued for UiT yet → set to NA
-      year = safe_year(dc.date.issued),
-      
-      authors = dc.contributor.author,
-      n_authors = as.integer(count_entries(dc.contributor.author)),
-      url = dc.identifier.uri,
-      
-      language = if (length(language_cols) == 0) {
+      language  = if (length(language_cols) == 0) {
         NA_character_
       } else {
-        dplyr::coalesce(!!!syms(language_cols))
+        dplyr::coalesce(!!!rlang::syms(language_cols))
       },
       
-      full_text_available = if (length(description_cols) == 0) {
+      subject   = NA_character_,
+      
+      title     = if (length(title_cols) == 0) {
         NA_character_
       } else {
-        dplyr::case_when(
-          stringr::str_detect(dplyr::coalesce(!!!syms(description_cols)), "Full text not available") ~ "Nei",
-          is.na(dplyr::coalesce(!!!syms(description_cols))) ~ "Ja",
-          TRUE ~ NA_character_
-        )
+        dplyr::coalesce(!!!rlang::syms(title_cols))
       },
-      
-      subject = NA_character_,
-      
-      title = if (length(title_cols) == 0) {
-        NA_character_
-      } else {
-        dplyr::coalesce(!!!syms(title_cols))
-      },
-      
       title_alt = if (length(title_alt_cols) == 0) {
         NA_character_
       } else {
-        dplyr::coalesce(!!!syms(title_alt_cols))
+        dplyr::coalesce(!!!rlang::syms(title_alt_cols))
       },
       
       abstract = if (length(abstract_cols) == 0) {
         NA_character_
       } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 1)
+        stringr::str_split_i(
+          dplyr::coalesce(!!!rlang::syms(abstract_cols)), "\\|\\|", 1
+        )
       },
-      
       abstract_alt = if (length(abstract_cols) == 0) {
         NA_character_
       } else {
-        stringr::str_split_i(dplyr::coalesce(!!!syms(abstract_cols)), "\\|\\|", 2)
+        stringr::str_split_i(
+          dplyr::coalesce(!!!rlang::syms(abstract_cols)), "\\|\\|", 2
+        )
       },
+      
+      # Bruker desc_tmp til å sette full_text_available
+      full_text_available = dplyr::case_when(
+        stringr::str_detect(desc_tmp, "Full text not available") ~ "Nei",
+        is.na(desc_tmp)                                          ~ "Ja",
+        TRUE                                                     ~ NA_character_
+      ),
       
       .keep = "none"
     )
