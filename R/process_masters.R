@@ -506,7 +506,46 @@ process_uit <- function(filename) {
         is.na(desc_tmp)                                          ~ "Ja",
         TRUE                                                     ~ NA_character_
       ),
-      
+
+      .keep = "none"
+    )
+}
+
+
+# -------------------------------------------------------------------
+# NORD ---------------------------------------------------------------
+# -------------------------------------------------------------------
+# Nord ships its dump as .xlsx (read with openxlsx2). All proper MGLU
+# theses sit under collection "11250/2721983"; a handful of rows in
+# the export have shifted columns (Brage export issue) and are
+# dropped here. GLU (1-7 vs 5-10) is not in `collection`; it is
+# inferred from dc.description[en_US], which contains strings like
+# "Master i grunnskolelærerutdanning 1-7. Matematikk 4 - 2023".
+process_nord <- function(filename) {
+  df <- openxlsx2::read_xlsx(filename)
+
+  df |>
+    dplyr::filter(collection == "11250/2721983") |>
+    dplyr::mutate(
+      id                = as.character(id),
+      institution_short = "nord",
+      collection        = collection,
+      GLU = dplyr::case_when(
+        stringr::str_detect(`dc.description[en_US]`, "1-7")  ~ "MGLU 1-7",
+        stringr::str_detect(`dc.description[en_US]`, "5-10") ~ "MGLU 5-10",
+        TRUE                                                 ~ NA_character_
+      ),
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
+      n_authors = as.integer(count_entries(dc.contributor.author)),
+      url       = dc.identifier.uri,
+      language  = `dc.language.iso[en_US]`,
+      subject   = NA_character_,
+      full_text_available = NA_character_,
+      title     = `dc.title[en_US]`,
+      title_alt = `dc.title.alternative[en_US]`,
+      abstract     = NA_character_,
+      abstract_alt = NA_character_,
       .keep = "none"
     )
 }

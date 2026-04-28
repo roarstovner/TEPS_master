@@ -19,10 +19,13 @@ Each institution has its own processing function, for example:
 -   `process_hiof()`
 -   `process_hvl()`
 -   `process_inn()`
+-   `process_nord()`
 -   `process_oslomet_old()` / `process_oslomet_new()`
 -   `process_uia()`
 -   `process_uit()`
 -   `process_usn()`
+
+Nord ships its dump as `.xlsx` (read with `openxlsx2`); all other institutions are CSV.
 
 Since Brage metadata formats differ between institutions, each function:
 
@@ -76,6 +79,26 @@ Result:
 
 ------------------------------------------------------------------------
 
+### Nord — malformed export rows + sparse fields
+
+The Nord `.xlsx` export contains 212 rows, but 3 have shifted columns
+(values bled across columns at export time) and are dropped during
+processing. The remaining 209 rows are kept.
+
+Within those 209:
+
+-   1 thesis has no `dc.description[en_US]`, so `GLU = NA`.
+-   1 thesis has no author.
+-   3 theses have no title.
+-   All abstracts are `NA` — Nord's Brage export does not include the
+    abstract column.
+
+GLU (1-7 vs 5-10) is inferred from `dc.description[en_US]` rather than
+from `collection`, because all Nord MGLU theses share the same
+collection code (`11250/2721983`).
+
+------------------------------------------------------------------------
+
 ### Oslomet — one missing year
 
 One Oslomet thesis is missing a year in the metadata.
@@ -89,6 +112,7 @@ It remains: `year = NA`
 -   **All missing values come from the source data.**
 -   **UiT:** 207 theses have missing authors *and* year in the original CSV export.
 -   **INN:** 77 theses are not part of a GLU collection → `GLU = NA`.
+-   **Nord:** 3 malformed export rows dropped; abstracts not provided in source; small numbers of missing GLU/title/author within the kept 209 rows.
 -   **Oslomet:** 1 missing year.
 -   The final dataset `masters.RDS` is complete. Missing values are kept as `NA` where metadata was absent in the source files.
 
