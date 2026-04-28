@@ -9,11 +9,10 @@ process_hiof <- function(filename) {
       id                = as.character(id),
       collection        = collection,          # NY
       institution_short = "hiof",
-      GLU = dplyr::case_match(
+      GLU = dplyr::recode_values(
         collection,
-        "11250/3011257" ~ "MGLU 1-7",
-        "11250/3011260" ~ "MGLU 5-10",
-        .default        = NA_character_
+        from = c("11250/3011257", "11250/3011260"),
+        to   = c("MGLU 1-7",      "MGLU 5-10")
       ),
       year      = safe_year(dc.date.issued),
       authors   = dc.contributor.author,
@@ -122,11 +121,10 @@ process_inn <- function(filename) {
       id                = as.character(id),
       institution_short = "inn",
       collection        = collection,   # ← NY
-      GLU = dplyr::case_match(
+      GLU = dplyr::recode_values(
         collection,
-        "11250/2980782" ~ "MGLU 1-7",
-        "11250/2980784" ~ "MGLU 5-10",
-        .default = NA_character_
+        from = c("11250/2980782", "11250/2980784"),
+        to   = c("MGLU 1-7",      "MGLU 5-10")
       ),
       year      = safe_year(dc.date.issued),
       authors   = dc.contributor.author,
@@ -158,11 +156,10 @@ process_oslomet_old <- function(filename) {
       id                = as.character(id),
       institution_short = "oslomet",
       collection        = collection,   # ← NY
-      GLU = dplyr::case_match(
+      GLU = dplyr::recode_values(
         collection,
-        "10642/6821" ~ "MGLU 1-7",
-        "10642/6822" ~ "MGLU 5-10",
-        .default = NA_character_
+        from = c("10642/6821", "10642/6822"),
+        to   = c("MGLU 1-7",   "MGLU 5-10")
       ),
       year      = safe_year(dc.date.issued),
       authors   = dc.contributor.author,
@@ -231,11 +228,10 @@ process_oslomet_new <- function(filename) {
       id                = as.character(id),
       institution_short = "oslomet",
       collection        = collection,
-      GLU = dplyr::case_match(
+      GLU = dplyr::recode_values(
         collection,
-        "10642/6821" ~ "MGLU 1-7",
-        "10642/6822" ~ "MGLU 5-10",
-        .default     = NA_character_
+        from = c("10642/6821", "10642/6822"),
+        to   = c("MGLU 1-7",   "MGLU 5-10")
       ),
       year      = safe_year(dc.date.issued),
       authors   = dc.contributor.author,
@@ -316,12 +312,10 @@ process_usn <- function(filename) {
       id                = as.character(id),
       institution_short = "usn",
       collection        = collection,
-      GLU = dplyr::case_match(
+      GLU = dplyr::recode_values(
         collection,
-        "11250/2732887" ~ "MGLU 1-7",
-        "11250/2732886" ~ "MGLU 5-10",
-        "11250/2732885" ~ "MGLU 1-7",
-        .default        = NA_character_
+        from = c("11250/2732887", "11250/2732886", "11250/2732885"),
+        to   = c("MGLU 1-7",      "MGLU 5-10",     "MGLU 1-7")
       ),
       year      = safe_year(dc.date.issued),
       authors   = dc.contributor.author,
