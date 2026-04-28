@@ -8,7 +8,6 @@ source("R/process_masters.R")
 
 
 filenames <- list.files(path = "data-raw", pattern = "\\.csv$", full.names = TRUE)
-filenames <- filenames[!str_detect(filenames, "hivolda")]  # dropp den korrupte fila
 nord_file <- list.files(path = "data-raw", pattern = "nord.*\\.xlsx$", full.names = TRUE)
 
 # HIOF
@@ -20,6 +19,11 @@ validate_masters(hiof)
 hvl_files <- filenames[str_detect(filenames, "hvl")]
 hvl <- map(hvl_files, process_hvl) |> bind_rows()
 validate_masters(hvl)
+
+# HIVOLDA
+hivolda_files <- filenames[str_detect(filenames, "hivolda")]
+hivolda <- map(hivolda_files, process_hivolda) |> bind_rows()
+validate_masters(hivolda)
 
 # INN
 inn_files <- filenames[str_detect(filenames, "inn_")]
@@ -58,6 +62,7 @@ validate_masters(nord)
 masters <- list(
   hiof,
   hvl,
+  hivolda,
   inn,
   oslomet,
   oslomet_new,

@@ -513,6 +513,144 @@ process_uit <- function(filename) {
 
 
 # -------------------------------------------------------------------
+# Hivolda ------------------------------------------------------------
+# -------------------------------------------------------------------
+# Hivolda's Brage export (data-raw/2025-03_hivolda_11250-3012619 (4).csv)
+# arrived corrupted in three ways. We undo each layer in memory before
+# parsing as CSV.
+#
+#   1. Norwegian and typographic characters are stored as multi-byte
+#      mojibake (e.g. `å` is the byte pair 0xC7 0xBE; smart quotes are
+#      3-byte sequences with literal "?" filler). Decoding the raw
+#      bytes as Mac OS Roman makes the patterns visible as known
+#      printable strings, which we then rewrite to proper UTF-8.
+#
+#   2. Every physical line has ";;;;;;" (or sometimes ";;;") appended
+#      as junk -- presumably trailing empty fields from a different
+#      delimiter convention.
+#
+#   3. The original CSV's multi-line abstract fields have been wrapped
+#      with a spurious `"` at every physical-line break, so naive CSV
+#      parsing splits abstracts into separate fields. We strip those
+#      wrappers per-thesis chunk.
+#
+# After cleaning, 43 thesis rows parse to the expected 34-column
+# schema. One stray `"` inside a citation (`s. 111";` in the Norhagen
+# 2024 thesis) is patched explicitly before parsing.
+process_hivolda <- function(filename) {
+  raw <- readr::read_file_raw(filename)
+
+  # Decode raw bytes as Mac OS Roman so the mojibake byte sequences
+  # become identifiable strings. (This is the "lens that makes the
+  # corruption visible"; it is not the original encoding of the data.)
+  text <- stringi::stri_encode(raw, from = "macintosh", to = "UTF-8")
+
+  # Rewrite the mojibake patterns. Order matters: longer patterns
+  # first so they match before shorter overlapping ones.
+  text <- stringr::str_replace_all(text, c(
+    "«æ"        = "å",   # «æ -> å
+    "«›"        = "æ",   # «› -> æ
+    "«˜"        = "ø",   # «˜ -> ø
+    "«∏"        = "é",   # «∏ -> é
+    "«˝"        = "ó",   # «˝ -> ó
+    "∂Æ"        = "«",   # ∂Æ -> «
+    "∂Ø"        = "»",   # ∂Ø -> »
+    "∂ı"        = "§",   # ∂ı -> §
+    "∂Ô"        = "’",   # ∂Ô -> ’
+    "É\\?ù"     = "”",   # É?ù -> ”
+    "«\\? "          = "Å ",  # «? <space> -> Å (infinitive at sentence start)
+    "«\\?"           = "Ø",   # «? -> Ø (most common in surnames)
+    "É\\?\\?"        = "’"    # É?? -> ’
+  ))
+
+  # One source-level data error (stray quote inside a citation):
+  text <- stringr::str_replace(text, stringr::fixed("s. 111\"; Grims"), "s. 111; Grims")
+
+  # Pull out the header (everything before the first thesis UUID).
+  # The pattern `"<UUID>,` only occurs at thesis-record starts in this file.
+  uuid_re <- "\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12},"
+  starts <- stringr::str_locate_all(text, uuid_re)[[1]][, "start"]
+  if (length(starts) == 0L) stop("process_hivolda: no thesis records found in ", filename)
+
+  header_text <- substr(text, 1L, starts[1] - 1L)
+  header_text <- stringr::str_remove(header_text, ";;;;;;\\s*$")
+  header_text <- stringr::str_trim(header_text)
+
+  # Slice out one chunk per thesis.
+  ends <- c(starts[-1] - 1L, nchar(text))
+  chunks <- substring(text, starts, ends)
+
+  # Per-thesis cleanup: drop the trailing record terminator, drop
+  # internal `;;;` markers and the spurious `"` wrappers that flank
+  # them at line breaks, and collapse any leftover newlines to spaces.
+  clean_chunk <- function(s) {
+    s <- stringr::str_remove(s, ";;;;;+\\s*$")
+    s <- stringr::str_replace_all(s, '";;;+\\n"', " ")
+    s <- stringr::str_replace_all(s, '";;;+\\n', " ")
+    s <- stringr::str_replace_all(s, ';;;+\\n"', " ")
+    s <- stringr::str_replace_all(s, ";;;+\\n", " ")
+    s <- stringr::str_replace_all(s, ";;;+", " ")
+    s <- stringr::str_replace_all(s, "\\n", " ")
+    stringr::str_trim(s)
+  }
+  chunks <- vapply(chunks, clean_chunk, character(1), USE.NAMES = FALSE)
+
+  # Each chunk is now `"<inner csv row>"` with `""` for embedded
+  # quotes. Strip the outer quotes and un-double, then parse together
+  # with the header as a normal CSV.
+  inners <- substr(chunks, 2L, nchar(chunks) - 1L)
+  inners <- gsub('""', '"', inners, fixed = TRUE)
+
+  clean_csv <- paste0(header_text, "\n", paste(inners, collapse = "\n"))
+  df <- readr::read_csv(I(clean_csv), show_col_types = FALSE)
+
+  # Map to the unified 15-column schema. Localcode encodes GLU
+  # explicitly for ~5 theses; the remainder fall through to NA.
+  localcode_combined <- dplyr::coalesce(
+    df$`dc.description.localcode`,
+    df$`dc.description.localcode[en_US]`
+  )
+
+  df |>
+    dplyr::mutate(
+      id                = as.character(id),
+      institution_short = "hivolda",
+      collection        = collection,
+      GLU = dplyr::case_when(
+        stringr::str_detect(localcode_combined, "5-10") ~ "MGLU 5-10",
+        stringr::str_detect(localcode_combined, "1-7")  ~ "MGLU 1-7",
+        TRUE                                            ~ NA_character_
+      ),
+      year      = safe_year(dc.date.issued),
+      authors   = dc.contributor.author,
+      n_authors = as.integer(count_entries(dc.contributor.author)),
+      url       = dc.identifier.uri,
+      language  = dplyr::coalesce(`dc.language.iso[en_US]`, dc.language.iso),
+      subject   = NA_character_,
+      full_text_available = NA_character_,
+      title = dplyr::coalesce(
+        `dc.title[en_US]`, `dc.title[nb_NO]`, `dc.title[nn_NO]`
+      ),
+      title_alt = dplyr::coalesce(
+        `dc.title.alternative[en_US]`,
+        `dc.title.alternative[nb_NO]`,
+        `dc.title.alternative[nn_NO]`
+      ),
+      abstract = dplyr::coalesce(
+        `dc.description.abstract[en_US]`,
+        `dc.description.abstract[nb_NO]`,
+        `dc.description.abstract[nn_NO]`
+      ),
+      abstract_alt = dplyr::coalesce(
+        `dc.description.abstract[nb_NO]`,
+        `dc.description.abstract[nn_NO]`
+      ),
+      .keep = "none"
+    )
+}
+
+
+# -------------------------------------------------------------------
 # NORD ---------------------------------------------------------------
 # -------------------------------------------------------------------
 # Nord ships its dump as .xlsx (read with openxlsx2). All proper MGLU

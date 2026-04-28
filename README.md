@@ -17,6 +17,7 @@ The output structure is validated with `validate_masters()`.
 Each institution has its own processing function, for example:
 
 -   `process_hiof()`
+-   `process_hivolda()`
 -   `process_hvl()`
 -   `process_inn()`
 -   `process_nord()`
@@ -79,6 +80,37 @@ Result:
 
 ------------------------------------------------------------------------
 
+### Hivolda — corrupt CSV export
+
+The Hivolda Brage export `2025-03_hivolda_11250-3012619 (4).csv` arrived
+in a triply broken state:
+
+1.  Norwegian and typographic characters were stored as multi-byte
+    mojibake (e.g. `å` is the byte pair `0xC7 0xBE`; smart quotes are
+    3-byte placeholders ending in literal `??`).
+2.  Every physical line had `;;;;;;` appended as junk.
+3.  Multi-line abstract fields had spurious `"` wrappers added at every
+    line break, which broke standard CSV parsing.
+
+`process_hivolda()` undoes all three layers in memory before parsing
+(see `R/process_masters.R`). After cleaning, all 43 thesis rows parse
+to the expected 34-column schema. One additional source-level error
+(a stray `"` inside a citation in the Norhagen 2024 thesis) is patched
+explicitly.
+
+A few residual data-quality limitations:
+
+-   The single-byte mojibake `0xC7 ?` is ambiguous between `Ø`, `Å`,
+    and `Ö`. We resolve it heuristically (`Å` when followed by a
+    space, `Ø` otherwise), which is correct for the common Norwegian
+    cases but produces `Ø` instead of `Ö` for the Turkish surname
+    *Özerk* (cited twice in one abstract).
+-   `dc.description.localcode` is populated for only 5 of 43 theses, so
+    `GLU = NA` for the remaining 38. This mirrors the missing-GLU
+    pattern at INN.
+
+------------------------------------------------------------------------
+
 ### Nord — malformed export rows + sparse fields
 
 The Nord `.xlsx` export contains 212 rows, but 3 have shifted columns
@@ -113,6 +145,7 @@ It remains: `year = NA`
 -   **UiT:** 207 theses have missing authors *and* year in the original CSV export.
 -   **INN:** 77 theses are not part of a GLU collection → `GLU = NA`.
 -   **Nord:** 3 malformed export rows dropped; abstracts not provided in source; small numbers of missing GLU/title/author within the kept 209 rows.
+-   **Hivolda:** 43 theses recovered from a corrupt export; 38 have `GLU = NA` because `dc.description.localcode` is empty in the source.
 -   **Oslomet:** 1 missing year.
 -   The final dataset `masters.RDS` is complete. Missing values are kept as `NA` where metadata was absent in the source files.
 
