@@ -55,7 +55,7 @@ validate_masters <- function(masters){
     filter(type != actual_type) |>
     ungroup() |>
     mutate(
-      error = str_glue("{colname} ({actual_type}): Expected {type}")
+      error = stringr::str_glue("{colname} ({actual_type}): Expected {type}")
     )
 
   errors <- errors |>
