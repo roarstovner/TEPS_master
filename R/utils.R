@@ -75,10 +75,19 @@ validate_masters <- function(masters){
 # names only their own author), or straight institution-side double uploads
 # (same title, same authors string, different ids).
 #
-# Strategy: group within institution_short by (norm_title, year). Rows with
-# NA / placeholder title pass through untouched. Inside each group, merge the
-# authors lists across rows (union of ||-separated tokens) and keep the most
-# informative remaining fields (longest non-NA abstract, then title_alt).
+# Strategy: three passes within institution_short, all keyed on year.
+#   Pass 1 groups on a normalised title.
+#   Pass 2 groups on a normalised abstract (catches typos that prevented a
+#   title-key match: e.g. "algbera" vs "algebra", subtitle present in only
+#   one row, etc.).
+#   Pass 3 groups on a normalised, sorted authors string (catches the case
+#   where both title and abstract drift between two records of the same
+#   thesis — same student(s) submitting twice in the same year at the same
+#   institution is treated as a duplicate).
+# Rows with NA / placeholder key in a given pass pass through that pass
+# untouched. Inside a matched group, authors lists are unioned
+# (||-separated tokens) and the most informative remaining fields are
+# retained (longest non-NA title, abstract, etc.).
 deduplicate_masters <- function(masters) {
 
   norm_title <- function(x) {
@@ -88,6 +97,31 @@ deduplicate_masters <- function(masters) {
     placeholder <- out %in% c("", "ingen tittel", "untitled")
     out[placeholder] <- NA_character_
     out
+  }
+
+  # Normalise abstract for exact-match comparison. Short / NA abstracts
+  # become NA — never used as a join key (would collapse unrelated rows).
+  norm_abstract <- function(x) {
+    out <- stringr::str_to_lower(x)
+    out <- stringr::str_replace_all(out, "[[:punct:][:space:]]+", " ")
+    out <- stringr::str_trim(out)
+    out[is.na(out) | nchar(out) < 50] <- NA_character_
+    out
+  }
+
+  # Normalise authors to an order-independent, lowercased ||-string.
+  # NA / empty becomes NA so the row passes through pass 3 unchanged.
+  norm_authors_key <- function(x) {
+    vapply(x, function(s) {
+      if (is.na(s)) return(NA_character_)
+      tokens <- stringr::str_trim(unlist(strsplit(s, "\\|\\|")))
+      tokens <- tokens[nchar(tokens) > 0]
+      if (length(tokens) == 0) return(NA_character_)
+      tokens <- stringr::str_to_lower(tokens)
+      tokens <- stringr::str_replace_all(tokens, "[[:punct:][:space:]]+", " ")
+      tokens <- stringr::str_trim(tokens)
+      paste(sort(unique(tokens)), collapse = "||")
+    }, character(1), USE.NAMES = FALSE)
   }
 
   pick_longest <- function(x) {
@@ -114,11 +148,12 @@ deduplicate_masters <- function(masters) {
   }
 
   collapse_group <- function(g) {
-    if (nrow(g) == 1) return(g)
+    if (nrow(g) <= 1) return(g)
     merged_authors <- merge_authors(g$authors)
     out <- g[1, , drop = FALSE]
     out$authors    <- merged_authors
     out$n_authors  <- as.integer(count_entries(merged_authors))
+    out$title      <- pick_longest(g$title)
     out$abstract   <- pick_longest(g$abstract)
     out$abstract_alt <- pick_longest(g$abstract_alt)
     out$title_alt  <- pick_longest(g$title_alt)
@@ -129,19 +164,28 @@ deduplicate_masters <- function(masters) {
     out
   }
 
-  masters <- masters |>
-    dplyr::mutate(.norm_title = norm_title(title))
+  # Run one dedup pass. Rows where the key is NA pass through unchanged.
+  dedup_pass <- function(df, key_col) {
+    df <- df |> dplyr::mutate(.key = .data[[key_col]])
+    passthrough <- df |> dplyr::filter(is.na(.key))
+    candidates  <- df |> dplyr::filter(!is.na(.key))
+    deduped <- candidates |>
+      dplyr::group_by(institution_short, .key, year) |>
+      dplyr::group_modify(~ collapse_group(.x)) |>
+      dplyr::ungroup()
+    dplyr::bind_rows(deduped, passthrough) |> dplyr::select(-.key)
+  }
 
-  passthrough <- masters |> dplyr::filter(is.na(.norm_title))
-  candidates  <- masters |> dplyr::filter(!is.na(.norm_title))
-
-  deduped <- candidates |>
-    dplyr::group_by(institution_short, .norm_title, year) |>
-    dplyr::group_modify(~ collapse_group(.x)) |>
-    dplyr::ungroup()
-
-  dplyr::bind_rows(deduped, passthrough) |>
-    dplyr::select(-.norm_title)
+  masters |>
+    dplyr::mutate(.norm_title = norm_title(title)) |>
+    dedup_pass(".norm_title") |>
+    dplyr::select(-.norm_title) |>
+    dplyr::mutate(.norm_abs = norm_abstract(abstract)) |>
+    dedup_pass(".norm_abs") |>
+    dplyr::select(-.norm_abs) |>
+    dplyr::mutate(.norm_auth = norm_authors_key(authors)) |>
+    dedup_pass(".norm_auth") |>
+    dplyr::select(-.norm_auth)
 }
 
 
