@@ -74,5 +74,8 @@ masters <- list(
 
 validate_masters(masters)
 
+masters <- deduplicate_masters(masters)
+validate_masters(masters)
+
 write_rds(masters, file = "data/masters.RDS")
 
