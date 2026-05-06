@@ -1,0 +1,52 @@
+.viewer {
+  border-left: 1px solid #dee2e6;
+  padding-left: 1rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.abstract-display, .title-display {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: Georgia, serif;
+  line-height: 1.55;
+  padding: 0.5rem 0;
+}
+
+.abstract-display mark, .title-display mark {
+  background-color: #fff3a3;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.meta-table {
+  font-size: 0.9rem;
+}
+.meta-table th {
+  text-align: right;
+  padding-right: 0.75rem;
+  color: #6c757d;
+  font-weight: 500;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.meta-table td {
+  padding-bottom: 0.35rem;
+}
+
+.alt-label {
+  font-size: 0.8rem;
+  color: #78c2ad;  /* minty accent */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.stats-section {
+  margin-bottom: 2rem;
+}
+.stats-section h4 {
+  margin-bottom: 0.75rem;
+}
