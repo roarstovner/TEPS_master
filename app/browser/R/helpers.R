@@ -82,7 +82,7 @@ matches_query <- function(df, query) {
   # AND-match across tokens (all tokens must appear somewhere)
   hits <- rep(TRUE, length(haystack))
   for (tok in tokens) {
-    hits <- hits & grepl(tok, haystack, fixed = TRUE, ignore.case = TRUE)
+    hits <- hits & grepl(tok, haystack, fixed = TRUE)
   }
   hits
 }

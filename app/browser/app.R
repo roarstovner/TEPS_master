@@ -280,9 +280,10 @@ server <- function(input, output, session) {
       arrange(institution_short) |>
       mutate(institution_short = institution_labels[institution_short]) |>
       rename(Institution = institution_short)
-    # Add total column
-    num_cols <- setdiff(names(tab), "Institution")
-    tab$Total <- rowSums(tab[, num_cols, drop = FALSE])
+    year_cols <- setdiff(names(tab), "Institution")
+    year_cols <- year_cols[order(as.integer(year_cols))]
+    tab <- tab[, c("Institution", year_cols), drop = FALSE]
+    tab$Total <- rowSums(tab[, year_cols, drop = FALSE])
     datatable(tab, rownames = FALSE,
       options = list(dom = "t", paging = FALSE, scrollX = TRUE,
                      ordering = FALSE))
